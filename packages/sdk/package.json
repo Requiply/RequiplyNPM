@@ -7,11 +7,11 @@
   "homepage": "https://app.requiply.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Zafiiovskiy/RequiplyNPM.git",
+    "url": "git+https://github.com/Requiply/RequiplyNPM.git",
     "directory": "packages/sdk"
   },
   "bugs": {
-    "url": "https://github.com/Zafiiovskiy/RequiplyNPM/issues"
+    "url": "https://github.com/Requiply/RequiplyNPM/issues"
   },
   "engines": {
     "node": ">=18"
