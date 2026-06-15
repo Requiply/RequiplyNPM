@@ -1,0 +1,11 @@
+{
+  "name": "requiply-npm",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build:sdk": "npm run build --workspace @requiply/sdk",
+    "test:sdk": "npm run test --workspace @requiply/sdk"
+  }
+}
