@@ -4,7 +4,7 @@ Official JavaScript and TypeScript packages for integrating rental websites with
 
 ## Packages
 
-- `@requiply/sdk` - Framework-agnostic public API client.
+- `@requiply/api-sdk` - Framework-agnostic public API client.
 
 Planned framework adapters:
 

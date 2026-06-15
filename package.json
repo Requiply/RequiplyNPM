@@ -5,7 +5,7 @@
     "packages/*"
   ],
   "scripts": {
-    "build:sdk": "npm run build --workspace @requiply/sdk",
-    "test:sdk": "npm run test --workspace @requiply/sdk"
+    "build:api-sdk": "npm run build --workspace @requiply/api-sdk",
+    "test:api-sdk": "npm run test --workspace @requiply/api-sdk"
   }
 }

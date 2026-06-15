@@ -1,11 +1,11 @@
-# @requiply/sdk
+# @requiply/api-sdk
 
 Framework-agnostic TypeScript client for Requiply's public rental API. It works in Next.js, Nuxt, Node.js, serverless functions, and modern browsers.
 
 ## Install
 
 ```bash
-npm install @requiply/sdk
+npm install @requiply/api-sdk
 ```
 
 ## Server usage
@@ -13,7 +13,7 @@ npm install @requiply/sdk
 Use a secret key only in server code.
 
 ```ts
-import { RequiplyClient } from '@requiply/sdk';
+import { RequiplyClient } from '@requiply/api-sdk';
 
 const requiply = new RequiplyClient({
   baseUrl: process.env.REQUIPLY_BASE_URL ?? 'https://app.requiply.com',
