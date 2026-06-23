@@ -1,10 +1,10 @@
 {
   "name": "@requiply/api-sdk",
   "version": "0.1.0",
-  "description": "TypeScript SDK for the Requiply rental platform public API",
+  "description": "TypeScript SDK for building equipment rental websites and apps with Requiply",
   "author": "Andrian Zafiiovskiy <andrian.zafiiovskiy@gmail.com>",
   "license": "MIT",
-  "homepage": "https://app.requiply.com",
+  "homepage": "https://requiply.com",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Requiply/RequiplyNPM.git",
@@ -38,9 +38,17 @@
   },
   "keywords": [
     "requiply",
+    "equipment rental",
+    "construction rental",
+    "event rental",
+    "party rental",
+    "sports rental",
+    "outdoor rental",
     "rental",
     "inventory",
     "booking",
+    "rental website",
+    "rental booking",
     "sdk",
     "typescript"
   ],
