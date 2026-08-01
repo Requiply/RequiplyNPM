@@ -59,6 +59,8 @@ interface ApiErrorBody {
   [key: string]: unknown;
 }
 
+export const DEFAULT_REQUIPLY_API_URL = 'https://api.requiply.com';
+
 export class RequiplyError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -196,9 +198,7 @@ export class RequiplyClient {
     if (!options.apiKey.trim()) {
       throw new TypeError('Requiply apiKey is required');
     }
-    if (!options.baseUrl.trim()) {
-      throw new TypeError('Requiply baseUrl is required');
-    }
+    const baseUrl = options.baseUrl?.trim() || DEFAULT_REQUIPLY_API_URL;
     if (
       typeof window !== 'undefined'
       && options.apiKey.startsWith('rq_sk_')
@@ -210,7 +210,7 @@ export class RequiplyClient {
     }
 
     this.apiKey = options.apiKey;
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '');
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
     this.fetcher = options.fetch ?? globalThis.fetch;
     this.defaultHeaders = options.headers ?? {};
 

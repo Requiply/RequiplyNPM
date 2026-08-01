@@ -8,7 +8,8 @@ export interface RequiplyRequestOptions {
 
 export interface RequiplyClientOptions {
   apiKey: string;
-  baseUrl: string;
+  /** API origin. Defaults to https://api.requiply.com. */
+  baseUrl?: string;
   fetch?: typeof globalThis.fetch;
   headers?: HeadersInit;
   dangerouslyAllowSecretKeyInBrowser?: boolean;

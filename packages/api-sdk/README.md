@@ -44,7 +44,6 @@ Use a secret key only in server code.
 import { RequiplyClient } from '@requiply/api-sdk';
 
 const requiply = new RequiplyClient({
-  baseUrl: process.env.REQUIPLY_BASE_URL ?? 'https://app.requiply.com',
   apiKey: process.env.REQUIPLY_SECRET_KEY!,
 });
 
@@ -60,7 +59,6 @@ Publishable keys can be used for public catalog, availability, quote, and bookin
 
 ```ts
 const requiply = new RequiplyClient({
-  baseUrl: 'https://app.requiply.com',
   apiKey: 'rq_pk_live_...',
 });
 

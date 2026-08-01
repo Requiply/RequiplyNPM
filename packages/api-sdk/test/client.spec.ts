@@ -10,6 +10,15 @@ function jsonResponse(body: unknown, init: ResponseInit = {}) {
 }
 
 describe('RequiplyClient', () => {
+  it('uses the hosted Requiply API by default', async () => {
+    const fetcher = vi.fn(async () => jsonResponse({ items: [], nextCursor: null }));
+    const client = new RequiplyClient({ apiKey: 'rq_pk_live_test', fetch: fetcher });
+
+    await client.inventory.list();
+
+    expect(String(fetcher.mock.calls[0]![0])).toBe('https://api.requiply.com/api/public/v1/inventory/list');
+  });
+
   it('sends auth and serializes query parameters', async () => {
     const fetcher = vi.fn(async () => jsonResponse({ items: [], nextCursor: null }));
     const client = new RequiplyClient({
