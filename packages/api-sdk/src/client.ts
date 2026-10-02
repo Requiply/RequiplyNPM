@@ -33,9 +33,18 @@ import type {
   PricingQuoteResponse,
   QueryValue,
   RequiplyClientOptions,
+  RequiplyErrorReason,
   RequiplyRequestOptions,
   RevenueReportParams,
   RevenueReportResponse,
+  SaleCreateInput,
+  SaleCreateResponse,
+  SaleItemResponse,
+  SaleItemsListParams,
+  SaleItemsListResponse,
+  SaleResponse,
+  SalesListParams,
+  SalesListResponse,
   ServicesListResponse,
   TopClientsReportParams,
   TopClientsReportResponse,
@@ -53,9 +62,9 @@ interface RequestConfig {
 }
 
 interface ApiErrorBody {
-  code?: string;
   message?: string;
   statusMessage?: string;
+  data?: unknown;
   [key: string]: unknown;
 }
 
@@ -63,20 +72,27 @@ export const DEFAULT_REQUIPLY_API_URL = 'https://api.requiply.com';
 
 export class RequiplyError extends Error {
   readonly status: number;
-  readonly code?: string;
+  /** Machine-readable refusal reason from the API, e.g. `out_of_stock`. */
+  readonly reason?: RequiplyErrorReason;
+  /** Extra fields the API attached to the error, e.g. `availableQuantity`. */
+  readonly data?: Record<string, unknown>;
+  /** The raw response body. */
   readonly details?: unknown;
+  /** Seconds to wait before retrying, from the `Retry-After` header. */
   readonly retryAfter?: number;
 
   constructor(message: string, options: {
     status: number;
-    code?: string;
+    reason?: RequiplyErrorReason;
+    data?: Record<string, unknown>;
     details?: unknown;
     retryAfter?: number;
   }) {
     super(message);
     this.name = 'RequiplyError';
     this.status = options.status;
-    this.code = options.code;
+    this.reason = options.reason;
+    this.data = options.data;
     this.details = options.details;
     this.retryAfter = options.retryAfter;
   }
@@ -170,6 +186,30 @@ export class RequiplyClient {
       }),
   };
 
+  readonly saleItems = {
+    list: (params: SaleItemsListParams = {}, options?: RequiplyRequestOptions) =>
+      this.request<SaleItemsListResponse>('/sale-items/list', { query: params, options }),
+    get: (saleItemId: string, options?: RequiplyRequestOptions) =>
+      this.request<SaleItemResponse>(`/sale-items/${encodeURIComponent(saleItemId)}`, { options }),
+  };
+
+  readonly sales = {
+    list: (params: SalesListParams = {}, options?: RequiplyRequestOptions) =>
+      this.request<SalesListResponse>('/sales/list', { query: params, options }),
+    /** `id` is the sale UUID, or the sale number shown in the app with `idKind: 'org'`. */
+    get: (
+      id: string | number,
+      params: { idKind?: 'internal' | 'org' } = {},
+      options?: RequiplyRequestOptions,
+    ) => this.request<SaleResponse>(`/sales/${encodeURIComponent(String(id))}`, { query: params, options }),
+    create: (input: SaleCreateInput, options?: RequiplyRequestOptions) =>
+      this.request<SaleCreateResponse>('/sales/create', {
+        method: 'POST',
+        body: input,
+        options,
+      }),
+  };
+
   readonly reports = {
     revenue: (params: RevenueReportParams = {}, options?: RequiplyRequestOptions) =>
       this.request<RevenueReportResponse>('/reports/revenue', { query: params, options }),
@@ -195,7 +235,7 @@ export class RequiplyClient {
   private readonly defaultHeaders: HeadersInit;
 
   constructor(options: RequiplyClientOptions) {
-    if (!options.apiKey.trim()) {
+    if (typeof options?.apiKey !== 'string' || !options.apiKey.trim()) {
       throw new TypeError('Requiply apiKey is required');
     }
     const baseUrl = options.baseUrl?.trim() || DEFAULT_REQUIPLY_API_URL;
@@ -236,9 +276,6 @@ export class RequiplyClient {
     if (config.body !== undefined) {
       headers.set('Content-Type', 'application/json');
     }
-    if (config.options?.idempotencyKey) {
-      headers.set('Idempotency-Key', config.options.idempotencyKey);
-    }
 
     const response = await this.fetcher(url, {
       method: config.method ?? 'GET',
@@ -252,13 +289,15 @@ export class RequiplyClient {
 
     if (!response.ok) {
       const error = isObject(data) ? data as ApiErrorBody : undefined;
+      const errorData = isObject(error?.data) ? error.data : undefined;
       const retryAfterHeader = response.headers.get('retry-after');
       const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : undefined;
       throw new RequiplyError(
-        error?.message ?? error?.statusMessage ?? `Requiply API request failed with status ${response.status}`,
+        error?.message || error?.statusMessage || `Requiply API request failed with status ${response.status}`,
         {
           status: response.status,
-          code: typeof error?.code === 'string' ? error.code : undefined,
+          reason: typeof errorData?.reason === 'string' ? errorData.reason : undefined,
+          data: errorData,
           details: data,
           retryAfter: retryAfter !== undefined && Number.isFinite(retryAfter) ? retryAfter : undefined,
         },

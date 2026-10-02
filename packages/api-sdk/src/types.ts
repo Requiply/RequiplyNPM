@@ -3,7 +3,6 @@ export type QueryValue = string | number | boolean | null | undefined;
 export interface RequiplyRequestOptions {
   signal?: AbortSignal;
   headers?: HeadersInit;
-  idempotencyKey?: string;
 }
 
 export interface RequiplyClientOptions {
@@ -15,10 +14,66 @@ export interface RequiplyClientOptions {
   dangerouslyAllowSecretKeyInBrowser?: boolean;
 }
 
+/**
+ * Machine-readable reasons the API puts on refused requests. Branch on
+ * `RequiplyError.reason`; new reasons may be added, so keep a fallback.
+ */
+export type RequiplyErrorReason =
+  | 'out_of_stock'
+  | 'selling_disabled'
+  | 'feature_disabled'
+  | 'invalid_lines'
+  | 'invalid_payment'
+  | 'payment_method_unavailable'
+  | 'client_email_required'
+  | 'duplicate_line'
+  | 'sale_item_not_found'
+  | 'sale_item_archived'
+  | 'sale_not_found'
+  | 'sale_cancelled'
+  | 'sale_on_booking'
+  | 'not_found'
+  | 'stale'
+  | (string & {});
+
+export type PaymentMethod = 'payOnPickup' | 'monobank' | 'liqpay' | 'wayforpay' | 'stripe';
+
 export interface PaymentRedirect {
   kind: 'url' | 'post_form';
   url: string;
   fields?: Record<string, string>;
+}
+
+export type BookingAdjustmentType = 'units' | 'percent' | 'amount';
+
+/**
+ * Manual booking adjustment: a period delta (`units`), a percentage of the
+ * total (`percent`, -100 to 100) or a flat amount in the org currency
+ * (`amount`). Signed. Secret keys only, and only when the organization has
+ * adjustments on and allows the type.
+ */
+export interface BookingAdjustment {
+  type: BookingAdjustmentType;
+  value: number;
+  reason?: string | null;
+}
+
+export type WorkingDay =
+  | 'monday'
+  | 'tuesday'
+  | 'wednesday'
+  | 'thursday'
+  | 'friday'
+  | 'saturday'
+  | 'sunday';
+
+export interface WorkingHours {
+  day: WorkingDay;
+  /** `HH:mm`, in the organization's timezone. */
+  startTime: string;
+  /** `HH:mm`, in the organization's timezone. */
+  endTime: string;
+  isWorkingDay: boolean;
 }
 
 export interface PublicV1PricingTier {
@@ -46,8 +101,10 @@ export interface PublicV1InventoryItem {
 export interface InventoryListParams {
   category?: string;
   search?: string;
+  /** Pass with `endDate` to get availability for the period. */
   startDate?: string;
   endDate?: string;
+  /** 1-100. Defaults to 25. */
   limit?: number;
   cursor?: string;
 }
@@ -84,6 +141,7 @@ export interface ItemGroupResponse {
 export interface AvailabilityCalendarInput {
   startDate: string;
   endDate: string;
+  /** Up to 200 item group ids. Omit for every group. */
   groupIds?: string[];
 }
 
@@ -104,6 +162,7 @@ export interface AvailabilityItemsInput {
   startDate: string;
   endDate: string;
   search?: string;
+  /** 1-100. Defaults to 25. */
   limit?: number;
   cursor?: string;
 }
@@ -122,12 +181,27 @@ export interface QuoteService {
   serviceId: string;
 }
 
+export interface SaleLineInput {
+  saleItemId: string;
+  /** Whole units, above zero. */
+  quantity: number;
+}
+
 export interface PricingQuoteInput {
   startDate: string;
   endDate: string;
   items: QuoteItem[];
   services?: QuoteService[];
+  /** Applies the client's percentage discount. */
   clientId?: number;
+  /** Secret keys only. `null` prices without one. */
+  adjustment?: BookingAdjustment | null;
+  /**
+   * Equipment for sale sold with the booking, at the catalog price. Needs the
+   * Sales feature; a publishable key also needs the organization to sell to
+   * customers and cannot buy beyond the stock on hand.
+   */
+  saleLines?: SaleLineInput[];
 }
 
 export interface PublicV1QuoteLineItem {
@@ -143,19 +217,44 @@ export interface PublicV1QuoteLineService {
   serviceId: string;
   name: string;
   subtotal: number;
+  /** True when the service is billed in full regardless of the client discount. */
+  excludedFromDiscount: boolean;
+}
+
+export interface PublicV1QuoteLineSaleItem {
+  saleItemId: string;
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  subtotal: number;
+  stockOnHand: number;
+  /** Stock after this sale; negative means the shelf count is behind. */
+  stockAfter: number;
 }
 
 export interface PricingQuoteResponse {
   currency: string;
   itemsSubtotal: number;
   servicesSubtotal: number;
+  /** Part of the items and services subtotal the client discount applies to. */
+  discountableSubtotal: number;
   discountPercentage: number;
+  discountAmount: number;
+  /** The adjustment the quote was priced with; null when none. */
+  adjustment: BookingAdjustment | null;
+  /** Signed money effect of a `percent` or `amount` adjustment; 0 for `units`. */
+  adjustmentAmount: number;
+  /** Includes `saleSubtotal`. */
   total: number;
   lineItems: PublicV1QuoteLineItem[];
   lineServices: PublicV1QuoteLineService[];
+  /** Net total of the sold items; already inside `total`, never discounted. */
+  saleSubtotal: number;
+  lineSaleItems: PublicV1QuoteLineSaleItem[];
 }
 
-export interface BookingCreateInput extends PricingQuoteInput {
+interface BookingCreateFields extends PricingQuoteInput {
+  /** Matched by email, then phone, or created. Ignored when `clientId` is set. */
   client?: {
     name?: string;
     lastName?: string;
@@ -163,29 +262,69 @@ export interface BookingCreateInput extends PricingQuoteInput {
     phone?: string;
   };
   deliveryType: 'pickup' | 'delivery';
-  paymentType?: 'payOnPickup' | 'monobank' | 'liqpay' | 'wayforpay' | 'stripe';
-  asRequest?: boolean;
+  /**
+   * Allows a pickup or return outside the organization's working schedule.
+   * Accepted with a secret key; publishable keys receive a 403.
+   */
+  allowOutsideWorkingHours?: boolean;
 }
 
-export interface BookingCreateResponse {
-  success: boolean;
+/**
+ * A regular booking needs a `paymentType`. A booking request (`asRequest`)
+ * waits for staff approval: it holds no inventory and sets up no payment.
+ */
+export type BookingCreateInput = BookingCreateFields & (
+  | { asRequest?: false; paymentType: PaymentMethod }
+  | { asRequest: true; paymentType?: PaymentMethod }
+);
+
+export interface BookingCreated {
+  success: true;
   message?: string;
-  reservationId?: number;
-  reservationOrgId?: number;
+  reservationId: number;
+  /** Booking number shown in the app. */
+  reservationOrgId: number;
   totalCost: number;
   currency: string;
+  /** Link to an online payment, for online payment methods. */
   paymentUrl?: string;
   paymentRedirect?: PaymentRedirect;
-  isRequest?: boolean;
+  isRequest: boolean;
 }
 
+export interface BookingRefused {
+  success: false;
+  /** Why the booking was refused, e.g. items unavailable for the dates. */
+  message?: string;
+  totalCost: number;
+  currency: string;
+  /** Booking rule the request broke; absent for other refusals such as availability. */
+  reason?: 'working_hours' | 'minimum_duration';
+  minimumDuration?: {
+    minimumDurationMinutes: number;
+    requestedDurationMinutes: number;
+    /** Earliest return for the requested pickup, local `YYYY-MM-DDTHH:mm` in `timeZone`. */
+    earliestReturn: string;
+    timeZone: string;
+  };
+}
+
+/** A refused booking resolves (HTTP 200) with `success: false`; check it before using the ids. */
+export type BookingCreateResponse = BookingCreated | BookingRefused;
+
 export interface BookingListParams {
+  /** Reservation start date on or after (YYYY-MM-DD). */
   dateFrom?: string;
+  /** Reservation start date on or before (YYYY-MM-DD). */
   dateTo?: string;
+  /** Created at or after (ISO 8601). */
   createdFrom?: string;
+  /** Created at or before (ISO 8601). */
   createdTo?: string;
+  /** Comma-separated status names, case-insensitive, e.g. "Confirmed,Completed". */
   status?: string;
   clientId?: number;
+  /** 1-200. Defaults to 50. */
   limit?: number;
   cursor?: string;
 }
@@ -213,11 +352,22 @@ export interface BookingListResponse {
   currency: string;
 }
 
+export interface PublicV1Payment {
+  id: string;
+  amount: number;
+  currency: string;
+  method: string;
+  provider: string | null;
+  status: string;
+  paymentUrl: string | null;
+}
+
 export interface PublicV1BookingDetail {
   id: number;
   reservationOrgId: number | null;
   startDate: string;
   endDate: string;
+  /** Includes the net total of `saleItems`. */
   totalCost: number | null;
   currency: string;
   statusId: string | null;
@@ -225,15 +375,10 @@ export interface PublicV1BookingDetail {
   createdAt: string;
   items: Array<{ groupId: string; groupName: string; quantity: number }>;
   services: Array<{ serviceId: string; serviceName: string; price: number | null }>;
-  payments: Array<{
-    id: string;
-    amount: number;
-    currency: string;
-    method: string;
-    provider: string | null;
-    status: string;
-    paymentUrl: string | null;
-  }>;
+  payments: PublicV1Payment[];
+  /** Equipment for sale sold with the booking; empty when nothing was sold or Sales is off. */
+  saleItems: PublicV1SaleLine[];
+  saleId: string | null;
 }
 
 export interface BookingDetailResponse {
@@ -249,6 +394,7 @@ export interface BookingNoteResponse {
 export interface ClientLookupInput {
   email?: string;
   phone?: string;
+  /** Fuzzy search across name, last name, email and phone. Results come back in `matches`. */
   search?: string;
 }
 
@@ -263,6 +409,7 @@ export interface PublicV1ClientSummary {
 
 export interface ClientLookupResponse {
   client: PublicV1ClientSummary | null;
+  /** Present only when `search` was provided. */
   matches?: PublicV1ClientSummary[];
 }
 
@@ -270,11 +417,13 @@ export interface ClientCreateInput {
   name?: string;
   lastName?: string;
   email?: string;
+  /** International E.164 format, e.g. +380951234567. */
   phone?: string;
 }
 
 export interface ClientCreateResponse {
   client: PublicV1ClientSummary;
+  /** False when an existing client matched by email or phone was returned. */
   created: boolean;
 }
 
@@ -283,6 +432,8 @@ export interface PublicV1Service {
   name: string;
   price: number | null;
   priceType: string;
+  /** When true the client's percentage discount is not applied to this service. */
+  excludeFromDiscounts: boolean;
 }
 
 export interface ServicesListResponse {
@@ -311,8 +462,13 @@ export interface OrgInfoResponse {
   logoUrlLight: string | null;
   logoUrlDark: string | null;
   timezone: string;
+  /**
+   * Weekly working days and hours in `timezone`. Pickups and returns must fall
+   * inside them. An organization without saved settings is always open.
+   */
+  workingHours: WorkingHours[];
   supportedDeliveryTypes: Array<'pickup' | 'delivery'>;
-  supportedPaymentMethods: Array<'payOnPickup' | 'monobank' | 'liqpay' | 'wayforpay'>;
+  supportedPaymentMethods: PaymentMethod[];
   locations: PublicV1Location[];
 }
 
@@ -335,7 +491,7 @@ export interface OrgSummaryResponse {
   };
   locations: PublicV1Location[];
   supportedDeliveryTypes: Array<'pickup' | 'delivery'>;
-  supportedPaymentMethods: Array<'payOnPickup' | 'monobank' | 'liqpay' | 'wayforpay'>;
+  supportedPaymentMethods: PaymentMethod[];
   stats: {
     totalClients: number;
     totalItemGroups: number;
@@ -357,6 +513,7 @@ export interface CategoriesListResponse {
 }
 
 export interface InventoryStatusParams {
+  /** 1-500. Defaults to 100. */
   limit?: number;
 }
 
@@ -381,6 +538,165 @@ export interface InventoryStatusResponse {
     clientName: string | null;
     clientLastName: string | null;
   }>;
+}
+
+export interface PublicV1SaleItem {
+  id: string;
+  name: string;
+  sku: string | null;
+  /** Null for publishable keys. */
+  barcode: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
+  imageUrl: string | null;
+  /** Flat price per unit in the org currency. */
+  salePrice: number;
+  currency: string;
+  /** Units on the shelf; can be negative when sales outran the recorded stock. */
+  stockOnHand: number;
+  /** Net cost per unit; null unless the caller may manage stock. */
+  purchaseCost: number | null;
+  isArchived: boolean;
+}
+
+export interface SaleItemsListParams {
+  search?: string;
+  /** Category id. */
+  category?: string;
+  /** Defaults to "active". Publishable keys always get active products. */
+  filter?: 'active' | 'archived' | 'all';
+  /** 1-100. Defaults to 25. */
+  limit?: number;
+  cursor?: string;
+}
+
+export interface SaleItemsListResponse {
+  items: PublicV1SaleItem[];
+  nextCursor: string | null;
+}
+
+export interface PublicV1SaleItemDetail extends PublicV1SaleItem {
+  /** Sales figures are 0 for publishable keys. */
+  soldUnits30d: number;
+  revenue30d: number;
+  soldUnitsTotal: number;
+}
+
+export interface SaleItemResponse {
+  saleItem: PublicV1SaleItemDetail;
+}
+
+export interface PublicV1SaleLine {
+  id: string;
+  saleItemId: string;
+  name: string;
+  sku: string | null;
+  quantity: number;
+  returnedQuantity: number;
+  unitPrice: number;
+  lineTotal: number;
+}
+
+export interface PublicV1SaleReturn {
+  id: string;
+  returnedAt: string;
+  amount: number;
+  note: string | null;
+  lines: Array<{ saleLineId: string; quantity: number; restock: boolean; amount: number }>;
+}
+
+export interface PublicV1Sale {
+  id: string;
+  /** Sale number shown in the app. */
+  saleOrgId: number | null;
+  status: 'completed' | 'cancelled';
+  soldAt: string;
+  total: number;
+  returnedTotal: number;
+  /** `total` minus returns. */
+  net: number;
+  paidAmount: number;
+  /** What a standalone sale still owes; 0 for booking sales, which are paid through the booking. */
+  balance: number;
+  paymentMethod: string | null;
+  paidAt: string | null;
+  note: string | null;
+  currency: string;
+  clientId: number | null;
+  clientName: string | null;
+  /** Set when the goods were sold with a booking. */
+  reservationId: number | null;
+  reservationOrgId: number | null;
+  itemCount: number;
+  itemsLabel: string;
+}
+
+export interface PublicV1SaleDetail extends PublicV1Sale {
+  lines: PublicV1SaleLine[];
+  returns: PublicV1SaleReturn[];
+  /** The sale's own payments, or the booking's for a booking sale. */
+  payments: PublicV1Payment[];
+}
+
+export interface SalesListParams {
+  kind?: 'standalone' | 'booking';
+  status?: 'completed' | 'cancelled';
+  /** Only standalone sales that still owe money. */
+  unpaid?: boolean;
+  clientId?: number;
+  /** Sold at or after (ISO 8601). */
+  soldFrom?: string;
+  /** Sold at or before (ISO 8601). */
+  soldTo?: string;
+  /** Sale number, client name, email or phone, item name or SKU. */
+  search?: string;
+  /** 1-100. Defaults to 25. */
+  limit?: number;
+  cursor?: string;
+}
+
+export interface SalesListResponse {
+  sales: PublicV1Sale[];
+  nextCursor: string | null;
+  currency: string;
+}
+
+export interface SaleResponse {
+  sale: PublicV1SaleDetail;
+}
+
+export interface SaleCreateInput {
+  lines: SaleLineInput[];
+  clientId?: number;
+  /** Matched by email, then phone, or created. Ignored when `clientId` is set. */
+  client?: {
+    name?: string;
+    lastName?: string;
+    email?: string;
+    phone?: string;
+  };
+  /** Defaults to "payOnPickup". LiqPay needs a client with an email. */
+  paymentMethod?: PaymentMethod;
+  /** ISO 8601. Defaults to now. */
+  soldAt?: string;
+  /** Up to 2000 characters. */
+  note?: string;
+}
+
+export interface PublicV1StockWarning {
+  saleItemId: string;
+  name: string;
+  stockOnHand: number;
+  /** Stock after the sale; negative means the shelf count is behind. */
+  after: number;
+}
+
+export interface SaleCreateResponse {
+  sale: PublicV1SaleDetail;
+  /** Products the sale took below zero stock. */
+  stockWarnings: PublicV1StockWarning[];
+  /** The pending charge the sale starts with; `paymentUrl` is set for online methods. */
+  payment: PublicV1Payment | null;
 }
 
 export type RevenueDateField = 'startDate' | 'createdAt' | 'endDate';
@@ -576,6 +892,8 @@ export interface OverdueReportResponse {
     totalCost: number | null;
     daysOverdue: number;
     severity: 'info' | 'warning' | 'critical';
+    /** Units a confirmed return checklist left with the client; empty until a return is confirmed. */
+    stillOutUnits: Array<{ itemId: string; sku: string | null }>;
   }>;
 }
 

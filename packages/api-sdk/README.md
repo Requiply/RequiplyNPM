@@ -93,11 +93,66 @@ Secret-key resources include booking administration, clients, reports, inventory
 - `pricing.quote()`
 - `bookings.create()`, `bookings.list()`, `bookings.get()`, `bookings.addNote()`
 - `clients.lookup()`, `clients.create()`
+- `saleItems.list()`, `saleItems.get()`
+- `sales.list()`, `sales.get()`, `sales.create()`
 - `reports.revenue()`, `reports.bookingsSummary()`, `reports.utilization()`
 - `reports.topItems()`, `reports.topClients()`, `reports.outstanding()`
 - `reports.overdue()`, `reports.pipeline()`
 
-Every method accepts request options as its final argument, including `signal`, custom `headers`, and `idempotencyKey`.
+Every method accepts request options as its final argument: an abort `signal` and custom `headers`.
+
+## Creating bookings
+
+A regular booking needs a `paymentType`; a booking request (`asRequest: true`) waits for staff approval and needs none. A booking the rental business cannot accept, for example because the items are taken or the pickup falls outside working hours, resolves with `success: false` instead of throwing, so check it before using the booking ids.
+
+```ts
+const result = await requiply.bookings.create({
+  startDate: '2026-07-01T09:00',
+  endDate: '2026-07-03T18:00',
+  items: [{ groupId: 'camera-kit', quantity: 1 }],
+  deliveryType: 'pickup',
+  paymentType: 'payOnPickup',
+  client: { name: 'Olena', email: 'olena@example.com' },
+});
+
+if (result.success) {
+  console.log('Booking', result.reservationOrgId, result.paymentUrl);
+} else {
+  console.log('Refused:', result.message, result.reason, result.minimumDuration?.earliestReturn);
+}
+```
+
+`org.info()` returns the organization's `workingHours`, so a booking form can offer valid pickup and return times up front.
+
+## Selling equipment
+
+Organizations with Sales on can sell products alongside rentals. Pass `saleLines` to `pricing.quote()` and `bookings.create()` to sell goods with a booking, or use `sales.create()` with a secret key for a standalone sale. Publishable keys can browse `saleItems` and buy them with a booking only while the organization sells to customers, and never beyond the stock on hand.
+
+```ts
+const { items } = await requiply.saleItems.list({ search: 'gloves' });
+
+const { sale, payment } = await requiply.sales.create({
+  lines: [{ saleItemId: items[0].id, quantity: 2 }],
+  client: { email: 'olena@example.com' },
+  paymentMethod: 'monobank',
+});
+```
+
+## Errors
+
+Failed requests throw `RequiplyError` with the HTTP `status`, the API `message`, a machine-readable `reason` when the API gives one (for example `out_of_stock` or `selling_disabled`), extra `data` such as `availableQuantity`, and `retryAfter` seconds on rate limits.
+
+```ts
+import { RequiplyError } from '@requiply/api-sdk';
+
+try {
+  await requiply.pricing.quote(input);
+} catch (error) {
+  if (error instanceof RequiplyError && error.reason === 'out_of_stock') {
+    console.log('Only', error.data?.availableQuantity, 'left');
+  }
+}
+```
 
 ## Common use cases
 
