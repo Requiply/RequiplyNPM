@@ -10,6 +10,7 @@ Brings the SDK in line with the Requiply public API v1.
 - The `idempotencyKey` request option is removed. The API does not deduplicate requests, so retrying `bookings.create()` or `sales.create()` can create a second record.
 - `BookingCreateResponse` is now a union of `BookingCreated` and `BookingRefused`. Check `success` before reading `reservationId`.
 - `BookingCreateInput` requires `paymentType` unless `asRequest` is `true`, matching the API's validation.
+- With a publishable key, `bookings.create()` must send `asRequest: true`; otherwise the API answers `403` with reason `request_only`.
 
 ### Added
 

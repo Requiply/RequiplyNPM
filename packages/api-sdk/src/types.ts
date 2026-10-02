@@ -19,6 +19,7 @@ export interface RequiplyClientOptions {
  * `RequiplyError.reason`; new reasons may be added, so keep a fallback.
  */
 export type RequiplyErrorReason =
+  | 'request_only'
   | 'out_of_stock'
   | 'selling_disabled'
   | 'feature_disabled'
