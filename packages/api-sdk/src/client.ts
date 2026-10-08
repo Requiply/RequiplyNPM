@@ -11,6 +11,9 @@ import type {
   BookingNoteResponse,
   BookingsSummaryParams,
   BookingsSummaryResponse,
+  BundleResponse,
+  BundlesListParams,
+  BundlesListResponse,
   CategoriesListResponse,
   ClientCreateInput,
   ClientCreateResponse,
@@ -123,6 +126,14 @@ export class RequiplyClient {
       this.request<ItemGroupResponse>(`/inventory/groups/${encodeURIComponent(groupId)}`, { options }),
     status: (params: InventoryStatusParams = {}, options?: RequiplyRequestOptions) =>
       this.request<InventoryStatusResponse>('/inventory/status', { query: params, options }),
+  };
+
+  readonly bundles = {
+    /** Bookable bundles; pass `startDate` and `endDate` for the whole sets free in that period. */
+    list: (params: BundlesListParams = {}, options?: RequiplyRequestOptions) =>
+      this.request<BundlesListResponse>('/bundles/list', { query: params, options }),
+    get: (bundleId: string, params: BundlesListParams = {}, options?: RequiplyRequestOptions) =>
+      this.request<BundleResponse>(`/bundles/${encodeURIComponent(bundleId)}`, { query: params, options }),
   };
 
   readonly availability = {

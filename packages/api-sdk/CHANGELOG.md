@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1
+
+### Added
+
+- `bundles.list()` and `bundles.get()`: fixed sets of products booked together with one discount.
+- `bundles` on `pricing.quote()` and `bookings.create()`; `items` may be empty when bundles are sent.
+- `bundleDiscountAmount` and `lineBundles` in quotes, and `bundles` on item group details.
+
 ## 0.2.0
 
 Brings the SDK in line with the Requiply public API v1.

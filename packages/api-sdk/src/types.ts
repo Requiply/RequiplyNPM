@@ -133,6 +133,8 @@ export interface PublicV1ItemGroupDetail {
   images: PublicV1ItemImage[];
   totalQuantity: number;
   pricingTiers: PublicV1PricingTier[];
+  /** Bookable bundles containing this group; empty when the organization offers none to this key. */
+  bundles: Array<{ id: string; name: string; discountPercent: number }>;
 }
 
 export interface ItemGroupResponse {
@@ -188,10 +190,74 @@ export interface SaleLineInput {
   quantity: number;
 }
 
+export interface BundleLineInput {
+  bundleId: string;
+  /** Whole sets, above zero. */
+  quantity: number;
+}
+
+export interface PublicV1BundleComponent {
+  groupId: string;
+  name: string;
+  sku: string;
+  /** Units of the group one bundle contains. */
+  quantity: number;
+  basePrice: number;
+  priceType: 'day' | 'hour' | 'month' | 'quote';
+  imageUrl: string | null;
+}
+
+/** A fixed set of products booked together with one discount on every component. */
+export interface PublicV1Bundle {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Percent taken off every component line, 0 to 100. */
+  discountPercent: number;
+  currency: string;
+  imageUrl: string | null;
+  images: PublicV1ItemImage[];
+  components: PublicV1BundleComponent[];
+  /** Whole sets free for the requested dates; null without dates. */
+  availableQuantity: number | null;
+}
+
+export interface BundlesListParams {
+  /** Pass with `endDate` to get availability for the period. */
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface BundlesListResponse {
+  bundles: PublicV1Bundle[];
+}
+
+export interface BundleResponse {
+  bundle: PublicV1Bundle;
+}
+
+/** A bundle of a quote, priced for the period. */
+export interface PublicV1QuoteLineBundle {
+  id: string;
+  bundleId: string | null;
+  name: string;
+  quantity: number;
+  discountPercent: number;
+  /** The bundled share of the component lines at full rate. */
+  grossTotal: number;
+  /** `grossTotal * discountPercent / 100`; already inside `total`. */
+  discountAmount: number;
+  /** Quantities are per bundle set. */
+  components: Array<{ groupId: string; name: string; quantity: number }>;
+}
+
 export interface PricingQuoteInput {
   startDate: string;
   endDate: string;
+  /** Lines outside any bundle; may be empty when `bundles` is set. */
   items: QuoteItem[];
+  /** Bundles to book; their components are added to `items`. Needs the Bundles feature. */
+  bundles?: BundleLineInput[];
   services?: QuoteService[];
   /** Applies the client's percentage discount. */
   clientId?: number;
@@ -252,6 +318,10 @@ export interface PricingQuoteResponse {
   /** Net total of the sold items; already inside `total`, never discounted. */
   saleSubtotal: number;
   lineSaleItems: PublicV1QuoteLineSaleItem[];
+  /** What the bundles save on their component lines; already inside `total`. 0 when none. */
+  bundleDiscountAmount: number;
+  /** Each bundle priced for the period. `lineItems` hold the merged quantities. */
+  lineBundles: PublicV1QuoteLineBundle[];
 }
 
 interface BookingCreateFields extends PricingQuoteInput {

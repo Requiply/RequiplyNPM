@@ -1,6 +1,6 @@
 {
   "name": "@requiply/api-sdk",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "TypeScript SDK for building equipment rental websites and apps with Requiply",
   "author": "Andrian Zafiiovskiy <andrian.zafiiovskiy@gmail.com>",
   "license": "MIT",
