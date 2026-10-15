@@ -77,6 +77,17 @@ export interface WorkingHours {
   isWorkingDay: boolean;
 }
 
+/** A named date or period the organization is closed. */
+export interface OrgHoliday {
+  name: string;
+  /** First day, `YYYY-MM-DD` in the organization's timezone. */
+  startDate: string;
+  /** Last day, inclusive, `YYYY-MM-DD` in the organization's timezone. */
+  endDate: string;
+  /** Repeats on the same month and day every year from `startDate` on. */
+  repeatsYearly: boolean;
+}
+
 export interface PublicV1PricingTier {
   fromUnit: number;
   toUnit: number | null;
@@ -538,6 +549,11 @@ export interface OrgInfoResponse {
    * inside them. An organization without saved settings is always open.
    */
   workingHours: WorkingHours[];
+  /**
+   * Dates the organization is closed. Pickups and returns cannot fall on them,
+   * though a rental may span them. Past one-off holidays are left out.
+   */
+  holidays: OrgHoliday[];
   supportedDeliveryTypes: Array<'pickup' | 'delivery'>;
   supportedPaymentMethods: PaymentMethod[];
   locations: PublicV1Location[];
