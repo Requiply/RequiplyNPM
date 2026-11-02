@@ -24,6 +24,8 @@ import type {
   InventoryStatusParams,
   InventoryStatusResponse,
   ItemGroupResponse,
+  ItemGroupUpdateInput,
+  ItemGroupUpdateResponse,
   OrgInfoResponse,
   OrgSummaryResponse,
   OutstandingReportParams,
@@ -58,7 +60,7 @@ import type {
 } from './types.js';
 
 interface RequestConfig {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'PATCH';
   query?: object;
   body?: unknown;
   options?: RequiplyRequestOptions;
@@ -124,6 +126,13 @@ export class RequiplyClient {
       this.request<InventoryListResponse>('/inventory/list', { query: params, options }),
     getGroup: (groupId: string, options?: RequiplyRequestOptions) =>
       this.request<ItemGroupResponse>(`/inventory/groups/${encodeURIComponent(groupId)}`, { options }),
+    /** Shows or hides a rental product for clients. Secret keys only. */
+    updateGroup: (groupId: string, input: ItemGroupUpdateInput, options?: RequiplyRequestOptions) =>
+      this.request<ItemGroupUpdateResponse>(`/inventory/groups/${encodeURIComponent(groupId)}`, {
+        method: 'PATCH',
+        body: input,
+        options,
+      }),
     status: (params: InventoryStatusParams = {}, options?: RequiplyRequestOptions) =>
       this.request<InventoryStatusResponse>('/inventory/status', { query: params, options }),
   };

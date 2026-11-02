@@ -108,6 +108,8 @@ export interface PublicV1InventoryItem {
   totalQuantity: number;
   availableQuantity: number;
   pricingTiers: PublicV1PricingTier[];
+  /** False when the product is hidden from clients. Publishable keys only ever get `true`. */
+  visibleToClients: boolean;
 }
 
 export interface InventoryListParams {
@@ -144,12 +146,26 @@ export interface PublicV1ItemGroupDetail {
   images: PublicV1ItemImage[];
   totalQuantity: number;
   pricingTiers: PublicV1PricingTier[];
+  /** False when the product is hidden from clients. A publishable key gets a 404 for such a group instead. */
+  visibleToClients: boolean;
   /** Bookable bundles containing this group; empty when the organization offers none to this key. */
   bundles: Array<{ id: string; name: string; discountPercent: number }>;
 }
 
 export interface ItemGroupResponse {
   itemGroup: PublicV1ItemGroupDetail;
+}
+
+export interface ItemGroupUpdateInput {
+  /**
+   * False hides the product from the client portal, website, booking widget, customer
+   * assistant and publishable keys. Staff, secret keys and bundles can still book it.
+   */
+  visibleToClients: boolean;
+}
+
+export interface ItemGroupUpdateResponse {
+  itemGroup: { id: string; name: string; visibleToClients: boolean };
 }
 
 export interface AvailabilityCalendarInput {

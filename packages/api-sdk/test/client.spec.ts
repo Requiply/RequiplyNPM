@@ -90,6 +90,25 @@ describe('RequiplyClient', () => {
     ]);
   });
 
+  it('changes whether a rental product is visible to clients', async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => jsonResponse({
+      itemGroup: { id: 'tent 1', name: 'Tent', visibleToClients: false },
+    }));
+    const client = new RequiplyClient({
+      apiKey: 'rq_sk_live_test',
+      baseUrl: 'https://example.com',
+      fetch: fetcher,
+    });
+
+    const { itemGroup } = await client.inventory.updateGroup('tent 1', { visibleToClients: false });
+
+    const [url, init] = fetcher.mock.calls[0]!;
+    expect(`${init?.method} ${String(url)}`).toBe('PATCH https://example.com/api/public/v1/inventory/groups/tent%201');
+    expect(new Headers(init?.headers).get('content-type')).toBe('application/json');
+    expect(JSON.parse(String(init?.body))).toEqual({ visibleToClients: false });
+    expect(itemGroup.visibleToClients).toBe(false);
+  });
+
   it('resolves a refused booking without throwing', async () => {
     const fetcher = vi.fn<typeof fetch>(async () => jsonResponse({
       success: false,

@@ -74,7 +74,7 @@ const quote = await requiply.pricing.quote({
 });
 ```
 
-Secret-key resources include booking administration, clients, reports, inventory status, and organization summaries. The client rejects `rq_sk_` keys in browser environments unless explicitly overridden.
+Products the rental business hides from clients never reach a publishable key. Secret-key resources include booking administration, clients, reports, inventory status, client visibility, and organization summaries. The client rejects `rq_sk_` keys in browser environments unless explicitly overridden.
 
 ## What you can build
 
@@ -88,7 +88,8 @@ Secret-key resources include booking administration, clients, reports, inventory
 
 - `org.info()`, `org.summary()`
 - `categories.list()`, `services.list()`
-- `inventory.list()`, `inventory.getGroup()`, `inventory.status()`
+- `inventory.list()`, `inventory.getGroup()`, `inventory.updateGroup()`, `inventory.status()`
+- `bundles.list()`, `bundles.get()`
 - `availability.calendar()`, `availability.items()`
 - `pricing.quote()`
 - `bookings.create()`, `bookings.list()`, `bookings.get()`, `bookings.addNote()`
@@ -123,6 +124,14 @@ if (result.success) {
 ```
 
 `org.info()` returns the organization's `workingHours`, so a booking form can offer valid pickup and return times up front.
+
+## Hiding products from clients
+
+Every rental product carries `visibleToClients`. A hidden product stays bookable by staff, secret keys and bundles, but drops off the client portal, website embed, booking widget and customer assistant. Publishable keys never see it: lists leave it out, and `inventory.getGroup()`, `pricing.quote()` and `bookings.create()` answer `404` when it is picked on its own rather than inside a bundle. Change it from the server with a secret key:
+
+```ts
+const { itemGroup } = await requiply.inventory.updateGroup(groupId, { visibleToClients: false });
+```
 
 ## Selling equipment
 

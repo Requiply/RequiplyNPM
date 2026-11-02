@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.0
+
+### Added
+
+- `inventory.updateGroup()` (secret keys): show or hide a rental product for clients with `{ visibleToClients }`. A hidden product drops off the client portal, website embed, booking widget, customer assistant and publishable-key reads, while staff, secret keys and bundles can still book it. The API answers `400` when `visibleToClients` is not a boolean and `404` for an unknown, archived or for-sale product.
+- `visibleToClients` on inventory items (`inventory.list()`, `availability.items()`) and on item group details (`inventory.getGroup()`).
+- `holidays` in `org.info()`.
+
+### API behavior
+
+- Publishable keys never see products hidden from clients. `inventory.list()`, `availability.items()` and `availability.calendar()` leave them out, and `inventory.getGroup()`, `pricing.quote()` and `bookings.create()` answer `404` for one picked on its own. A hidden product inside a bundle still books.
+
 ## 0.2.1
 
 ### Added
